@@ -168,7 +168,7 @@ static int run_moe(const std::vector<int>& nrv, const char* name) {
     float* os=&refout[(size_t)rows[gr]*D]; for(int o=0;o<D;o++) os[o]+=rw[gr]*hh[o];
   }
   std::vector<float> gout((size_t)S*D,0.f);
-  int ok = coli_metal_moe_block(nb,D,I,fmt,g.data(),u.data(),d.data(),gs.data(),us.data(),ds.data(),
+  int ok = coli_metal_moe_block(nb,D,I,fmt,0,g.data(),u.data(),d.data(),gs.data(),us.data(),ds.data(),
                                 xg.data(),xoff.data(),nr.data(),rows.data(),rw.data(),gout.data(),S);
   double maxabs=0,ymax=0; for(size_t i=0;i<gout.size();i++){ maxabs=fmax(maxabs,fabs(gout[i]-refout[i])); ymax=fmax(ymax,fabs(refout[i])); }
   double nerr=maxabs/(ymax+1e-9); int pass = ok && nerr<1e-4;
@@ -258,7 +258,7 @@ static int run_attn(int S, int pos_base, const char* name){
   }
   std::vector<float> got((size_t)S*TH);
   int ok=coli_metal_attn_decode(x.data(), qa.w,qa.s,2,0,qaln.data(), qb.w,qb.s,2,0,
-        kva.w,kva.s,2,0,kvaln.data(), kvb.w,kvb.s,2, o.w,o.s,2,0,
+        kva.w,kva.s,2,0,kvaln.data(), kvb.w,kvb.s,2,0, o.w,o.s,2,0,
         Lc,Rc,S,pos_base,0,eps,theta,ascale,got.data());
   double ma=0,ym=0; for(size_t i=0;i<ref.size();i++){ ma=fmax(ma,fabs(got[i]-ref[i])); ym=fmax(ym,fabs(ref[i])); }
   // also verify the cache write-back (Lc/Rc for the new positions)
@@ -420,7 +420,7 @@ static int run_attn_grouped(int S, int pos_base, int gs, const char* name){
   }
   std::vector<float> got((size_t)S*TH);
   int ok=coli_metal_attn_decode(x.data(), qa.w,qa.s,4,gs,qaln.data(), qb.w,qb.s,2,0,      // <- qa fmt=4/gs
-        kva.w,kva.s,2,0,kvaln.data(), kvb.w,kvb.s,2, o.w,o.s,2,0,
+        kva.w,kva.s,2,0,kvaln.data(), kvb.w,kvb.s,2,0, o.w,o.s,2,0,
         Lc,Rc,S,pos_base,0,eps,theta,ascale,got.data());
   double ma=0,ym=0; for(size_t i=0;i<ref.size();i++){ ma=fmax(ma,fabs(got[i]-ref[i])); ym=fmax(ym,fabs(ref[i])); }
   double mc=0; for(int s=0;s<S;s++){ int pos=pos_base+s;
