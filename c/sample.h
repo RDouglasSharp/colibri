@@ -5,6 +5,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "tok.h"
 
@@ -97,7 +98,22 @@ static int dist_sample(int V, int ban){
 /* next token from logits: greedy if g_temp<=0, sampling otherwise.
  * ban = token excluded because it was rejected by speculative verification. */
 static int pick_tok(const float *lo, int V, int ban){
-    if (g_temp <= 0) return argmax_v(lo, V);
+    if (g_temp <= 0) {
+        int a = argmax_v(lo, V);
+        /* COLI_LOGIT_GAP=1: probe-only dump of the top-2 logits at each greedy
+         * pick, to tell a near-tie (float accumulation order) apart from a real
+         * divergence. Read-only: the token returned is unchanged. */
+        static int gap_dbg = -1; static int gap_pos = 0;
+        if (gap_dbg < 0) { const char *e = getenv("COLI_LOGIT_GAP"); gap_dbg = (e && *e && *e != '0'); }
+        if (gap_dbg) {
+            int b = -1; float bv = -INFINITY;
+            for (int i = 0; i < V; i++) { float x = lo[i]; if (i != a && x == x && x > bv) { bv = x; b = i; } }
+            double t1 = (double)lo[a], t2 = (b >= 0) ? (double)bv : 0.0;
+            fprintf(stderr, "LOGITGAP pos=%d top1=%d:%.6f top2=%d:%.6f gap=%.9f\n",
+                    gap_pos++, a, t1, b, t2, (b >= 0) ? t1 - t2 : 0.0);
+        }
+        return a;
+    }
     dist_build(lo, V);
     return dist_sample(V, ban);
 }
