@@ -96,11 +96,11 @@ static float ref_e4m3(uint8_t b) {
                        : (1.0f+(float)mant*(1.0f/8.0f))*powf(2.0f,(float)exp-7.0f);
   return sign ? -val : val;
 }
-static int fp8_nblk(int n){ return (n+127)/128; }
+static int fp8_nblk_local(int n){ return (n+127)/128; }
 
 static void cpu_ref_fp8(const uint8_t *q8, const float *bscale, const float *x,
                         double *y, double *mag, int S, int I, int O) {
-  int nblkI = fp8_nblk(I);
+  int nblkI = fp8_nblk_local(I);
   for (int o=0;o<O;o++){
     const uint8_t *w = q8 + (size_t)o*I;
     const float *scl = bscale + (size_t)(o/128)*nblkI;
@@ -172,7 +172,7 @@ static int run_grouped(int O, int I, int gs, int S, int outlier, const char *nam
 // the block-scale accumulation, avoiding cancellation-noise false positives on
 // near-zero results).
 static int run_fp8(int O, int I, int S, const char *name) {
-  int nblkO=fp8_nblk(O), nblkI=fp8_nblk(I), nblk=nblkO*nblkI;
+  int nblkO=fp8_nblk_local(O), nblkI=fp8_nblk_local(I), nblk=nblkO*nblkI;
   std::vector<uint8_t> W((size_t)O*I);
   std::vector<float> scale((size_t)nblk), x((size_t)S*I), yg((size_t)S*O);
   std::vector<double> yr((size_t)S*O), mag((size_t)S*O);
@@ -213,7 +213,7 @@ static int run_fp8(int O, int I, int S, const char *name) {
 static int run_fp8_lut(const char *name) {
   enum { O=256, I=1 };
   std::vector<uint8_t> W(O*I); for (int b=0;b<O;b++) W[b]=(uint8_t)b;
-  std::vector<float> scale(fp8_nblk(O)*fp8_nblk(I), 1.0f);   // nblkO=2,nblkI=1 -> both blocks scale=1
+  std::vector<float> scale(fp8_nblk_local(O)*fp8_nblk_local(I), 1.0f);   // nblkO=2,nblkI=1 -> both blocks scale=1
   std::vector<float> x(I, 1.0f), yg(O);
   ColiMetalTensor *t=nullptr;
   if (!coli_metal_matmul(&t, yg.data(), x.data(), W.data(), scale.data(), FP8, 1, I, O, 0)) {
@@ -263,7 +263,7 @@ static int run_fp8_moe_gate(const char *name) {
   const float *gs[1] = {(const float*)bad}, *us[1] = {(const float*)bad}, *ds[1] = {(const float*)bad};
   float xg[8]={0}, out[8]={0}, rw[1]={1.0f};
   int xoff[1]={0}, nr[1]={1}, rows[1]={0};
-  int rc = coli_metal_moe_block(1, 8, 8, FP8, g, u, d, gs, us, ds, xg, xoff, nr, rows, rw, out, 1);
+  int rc = coli_metal_moe_block(1, 8, 8, FP8, 0, g, u, d, gs, us, ds, xg, xoff, nr, rows, rw, out, 1);
   int ok = (rc == 0);
   printf("  %-42s rc=%d (expect 0/CPU-fallback)  %s\n", name, rc, ok?"ok":"*** MISMATCH (should have refused)");
   return ok?0:1;
@@ -366,7 +366,7 @@ static int run_moe_e8(const std::vector<int>& nrv, const char* name) {
   std::vector<float> xg_gpu(xg);
   for(int gr=0;gr<R;gr++) e8_rot_rows(&xg_gpu[(size_t)gr*D],1,D);
   std::vector<float> gout((size_t)S*D,0.f);
-  int ok = coli_metal_moe_block(nb,D,I,fmt,g.data(),u.data(),d.data(),gs.data(),us.data(),ds.data(),
+  int ok = coli_metal_moe_block(nb,D,I,fmt,0,g.data(),u.data(),d.data(),gs.data(),us.data(),ds.data(),
                                 xg_gpu.data(),xoff.data(),nr.data(),rows.data(),rw.data(),gout.data(),S);
   double maxabs=0,ymax=0; for(size_t i=0;i<gout.size();i++){ maxabs=fmax(maxabs,fabs(gout[i]-refout[i])); ymax=fmax(ymax,fabs(refout[i])); }
   double nerr=maxabs/(ymax+1e-9); int pass = ok && nerr<1e-4;
